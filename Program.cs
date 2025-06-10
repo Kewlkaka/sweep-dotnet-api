@@ -9,10 +9,16 @@ using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
+//prod - render
+if (!builder.Environment.IsDevelopment())
+{
+    var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 //Clerk config
 var clerkPublicKey = builder.Configuration["Clerk:PublicKey"];
 var clerkSecretKey = builder.Configuration["Clerk:SecretKey"];
-
 if (string.IsNullOrEmpty(clerkPublicKey) || string.IsNullOrEmpty(clerkSecretKey))
 {
     throw new Exception("Clerk API keys are not configured properly.");
@@ -54,8 +60,10 @@ builder.Services.AddHttpClient("ClerkAPI");
 //authentication services
 builder.Services.AddScoped<ClerkAuthService>();
 builder.Services.AddScoped<AuthService>();
+
 //task service
 builder.Services.AddScoped<TaskService>();
+
 //cloudinary service
 builder.Services.AddScoped<CloudinaryService>();
 
@@ -64,18 +72,19 @@ builder.Services.Configure<IISServerOptions>(options =>
 {
     options.MaxRequestBodySize = 50 * 1024 * 1024; // 50 MB
 });
-
 builder.Services.Configure<FormOptions>(options =>
 {
     options.MultipartBodyLengthLimit = 50 * 1024 * 1024; // 50 MB
 });
 
-//cors for frontend integration
+//cors for frontend integration - Updated for production flexibility
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "https://your-production-frontend.com")
+        //localhost for dev
+        policy.WithOrigins("http://localhost:5173", "https://localhost:5173")
+              .SetIsOriginAllowedToAllowWildcardSubdomains()
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -84,7 +93,6 @@ builder.Services.AddCors(options =>
 
 //services 
 builder.Services.AddControllers();
-
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -98,7 +106,16 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+//remove HTTPS redirection for Render
+if (!app.Environment.IsDevelopment())
+{
+    // app.UseHttpsRedirection(); //disabled
+}
+else
+{
+    //keep HTTPS redirect for development
+    app.UseHttpsRedirection();
+}
 
 // Enable CORS
 app.UseCors();
